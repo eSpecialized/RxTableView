@@ -8,5 +8,5 @@ target 'RxTableView' do
   # Pods for RxTableView
   pod 'RxSwift', '~> 4.1'
   pod 'RxCocoa', '~> 4.1'
-
+  pod 'RxDataSources'
 end

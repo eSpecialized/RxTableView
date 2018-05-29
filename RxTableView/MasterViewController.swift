@@ -7,89 +7,100 @@
 //
 
 import UIKit
+import RxSwift
+import RxCocoa
+import RxDataSources
 
 class MasterViewController: UITableViewController {
 
     var detailViewController: DetailViewController? = nil
-    var objects = [Any]()
-
+    
+    let bag = DisposeBag()
+    
+    var dataSource: RxTableViewSectionedReloadDataSource<SectionModel<String,String>>!
+    //var dataEmitter = BehaviorSubject(value: [SectionModel(model: "Position", items: ["1st", "2nd", "3rd"])] )
+    var dataEmitter = ReplaySubject<[SectionModel<String,String>]>.create(bufferSize: 1)
+    
+    var trackedItems = ["1st", "2nd", "3rd","4th"]
+    var dataModel = SectionModel(model: "Position", items: [String]())
+    
+    
+    @IBOutlet weak var addButton: UIBarButtonItem!
+    
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
-        navigationItem.leftBarButtonItem = editButtonItem
 
-        let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(insertNewObject(_:)))
+        addButton.rx.tap.bind { [weak self] in
+            guard let sself = self else { return }
+            print("Tapped")
+            sself.trackedItems.append("This And That")
+            sself.dataModel.items = sself.trackedItems
+            sself.dataEmitter.onNext([sself.dataModel])
+            }
+            .disposed(by: bag)
+        
         navigationItem.rightBarButtonItem = addButton
         if let split = splitViewController {
             let controllers = split.viewControllers
             detailViewController = (controllers[controllers.count-1] as! UINavigationController).topViewController as? DetailViewController
         }
-    }
-
-    override func viewWillAppear(_ animated: Bool) {
-        clearsSelectionOnViewWillAppear = splitViewController!.isCollapsed
-        super.viewWillAppear(animated)
-    }
-
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
-    }
-
-    @objc
-    func insertNewObject(_ sender: Any) {
-        objects.insert(NSDate(), at: 0)
-        let indexPath = IndexPath(row: 0, section: 0)
-        tableView.insertRows(at: [indexPath], with: .automatic)
-    }
-
-    // MARK: - Segues
-
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if segue.identifier == "showDetail" {
-            if let indexPath = tableView.indexPathForSelectedRow {
-                let object = objects[indexPath.row] as! NSDate
-                let controller = (segue.destination as! UINavigationController).topViewController as! DetailViewController
-                controller.detailItem = object
-                controller.navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
-                controller.navigationItem.leftItemsSupplementBackButton = true
-            }
+        
+        tableView.dataSource = nil
+        
+        dataModel.items = trackedItems
+        dataEmitter.onNext([dataModel])
+        
+        dataSource = RxTableViewSectionedReloadDataSource<SectionModel<String,String>>(configureCell: { (dataSrc: TableViewSectionedDataSource , table: UITableView, indexPath: IndexPath, itemIn )  in
+            
+            let cell = table.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+            
+            cell.textLabel?.text = itemIn
+            
+            return cell
+        })
+        
+        dataSource.titleForHeaderInSection = { (dataSrc, index) in
+            return dataSrc.sectionModels[index].model
         }
+        
+        dataEmitter
+            .bind(to: tableView.rx.items(dataSource: dataSource))
+            .disposed(by: bag)
+        
+        
+        self.rx.sentMessage(#selector(prepare(for:sender:)))
+            .subscribe(onNext: { [weak self] items in
+                print("prepare For Segue")
+                if let segue = items.first as? UIStoryboardSegue {
+                    print("Segue \(segue.identifier!)")
+                    if let indexPath = self?.tableView.indexPathForSelectedRow {
+                        let object = self?.dataModel.items[indexPath.row]
+                        let controller = (segue.destination as! UINavigationController).topViewController as! DetailViewController
+                        controller.detailItem = object
+                        controller.navigationItem.leftBarButtonItem = self?.splitViewController?.displayModeButtonItem
+                        controller.navigationItem.leftItemsSupplementBackButton = true
+                    }
+                }
+                
+            })
+            .disposed(by: bag)
+        
+        self.rx.sentMessage(#selector(didReceiveMemoryWarning))
+            .subscribe(onNext: { Void in
+                super.didReceiveMemoryWarning()
+                print("didReceiveMemoryWarning")
+            })
+            .disposed(by: bag)
+        
+        self.rx.sentMessage(#selector(viewWillAppear(_:)))
+            .subscribe(onNext: { values in
+                if let animated = values.first as? Bool {
+                    super.viewWillAppear(animated)
+                }
+            })
+            .disposed(by: bag)
     }
-
-    // MARK: - Table View
-
-    override func numberOfSections(in tableView: UITableView) -> Int {
-        return 1
-    }
-
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return objects.count
-    }
-
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-
-        let object = objects[indexPath.row] as! NSDate
-        cell.textLabel!.text = object.description
-        return cell
-    }
-
-    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the specified item to be editable.
-        return true
-    }
-
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
-        if editingStyle == .delete {
-            objects.remove(at: indexPath.row)
-            tableView.deleteRows(at: [indexPath], with: .fade)
-        } else if editingStyle == .insert {
-            // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view.
-        }
-    }
-
 
 }
 
