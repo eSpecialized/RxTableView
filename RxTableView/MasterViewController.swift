@@ -30,6 +30,8 @@ class MasterViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        self.clearsSelectionOnViewWillAppear = true
 
         addButton.rx.tap.bind { [weak self] in
             guard let sself = self else { return }
@@ -75,9 +77,10 @@ class MasterViewController: UITableViewController {
                 if let segue = items.first as? UIStoryboardSegue {
                     print("Segue \(segue.identifier!)")
                     if let indexPath = self?.tableView.indexPathForSelectedRow {
-                        let object = self?.dataModel.items[indexPath.row]
                         let controller = (segue.destination as! UINavigationController).topViewController as! DetailViewController
-                        controller.detailItem = object
+                        if let object = self?.dataModel.items[indexPath.row] {
+                            controller.publishDetail.onNext(object)
+                        }
                         controller.navigationItem.leftBarButtonItem = self?.splitViewController?.displayModeButtonItem
                         controller.navigationItem.leftItemsSupplementBackButton = true
                     }
